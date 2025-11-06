@@ -1,0 +1,160 @@
+' ---------------- Diagrama de clases  ----------------
+@startumlGestionClientes
+skinparam classAttributeIconSize 0
+
+package model {
+    enum Role {
+        + ADMIN
+        + STANDARD
+    }
+
+    class Action {
+        - description: String
+        - timestamp: long
+        + Action(description: String)
+        + getDescription(): String
+        + getTimestamp(): long
+        + toString(): String
+    }
+
+    class User {
+        - id: String
+        - username: String
+        - fullName: String
+        - password: String
+        - role: Role
+        - actions: Action[]
+        - actionCount: int
+        - failedLoginAttempts: int
+        - locked: boolean
+        + static MAX_ACTIONS: int = 100
+        + static MAX_FAILED_ATTEMPTS: int = 3
+        + User(id:String, username:String, fullName:String, password:String, role:Role)
+        + getId(): String
+        + getUsername(): String
+        + getFullName(): String
+        + getRole(): Role
+        + setFullName(fullName:String): void
+        + checkPassword(password:String): boolean
+        + changePassword(current:String, newPwd:String): boolean
+        + setPasswordByAdmin(newPwd:String): void
+        + addAction(a:Action): boolean
+        + getActions(): Action[]
+        + isLocked(): boolean
+        + incrementFailedAttemptsAndLockIfNeeded(): boolean
+        + resetFailedAttempts(): void
+        + unlock(): void
+        + toString(): String
+    }
+}
+
+package service {
+    class UserService {
+        - users: User[]
+        - userCount: int
+        + static MAX_USERS: int = 50
+        + UserService()
+        - findIndexById(id:String): int
+        - findIndexByUsername(username:String): int
+        + createUser(actor:User, id:String, username:String, fullName:String, password:String, role:Role): boolean
+        + findById(id:String): User
+        + findByUsername(username:String): User
+        + updateUser(actor:User, targetId:String, newFullName:String, currentPwd:String, newPwd:String): boolean
+        + deleteUser(actor:User, targetId:String): boolean
+        + registerAction(actor:User, targetId:String, description:String): boolean
+        + showHistory(actor:User, targetId:String): void
+        + unlockUser(actor:User, targetId:String): boolean
+        + addInitialUser(u:User): boolean
+    }
+
+    class AuthService {
+        - userService: UserService
+        + AuthService(userService: UserService)
+        + login(username:String, password:String): User
+    }
+}
+
+package app {
+    class Main {
+        + main(args: String[]): void
+    }
+}
+
+' Relaciones
+User "1" *-- "*" Action : contiene >
+UserService ..> User : gestiona >
+AuthService ..> UserService : usa >
+Main ..> AuthService
+Main ..> UserService
+
+note right of User
+  - failedLoginAttempts: cuenta fallos
+  - locked: true => cuenta bloqueada
+  - ADMIN puede desbloquear y forzar contraseña con setPasswordByAdmin()
+end note
+
+@enduml
+
+' ---------------- Secuencia: Login con conteo y bloqueo ----------------
+@startuml Secuencia_Login_Bloqueo
+actor "Usuario (Interfaz/Test)" as Actor
+participant "AuthService" as Auth
+participant "UserService" as US
+participant "User" as U
+
+Actor -> Auth : login(username, password)
+Auth -> US : findByUsername(username)
+US --> Auth : retorna User (u) or null
+alt usuario no encontrado
+    Auth --> Actor : login fallido (usuario no encontrado)
+else usuario encontrado
+    Auth -> U : isLocked()
+    U --> Auth : false/true
+    alt cuenta bloqueada
+        Auth --> Actor : login fallido (cuenta bloqueada)
+    else cuenta activa
+        Auth -> U : checkPassword(password)
+        U --> Auth : true/false
+        alt contraseña correcta
+            Auth -> U : resetFailedAttempts()
+            Auth -> U : addAction("Inició sesión")
+            U --> Auth : true/false (registro acción)
+            Auth --> Actor : retorna User (login exitoso)
+        else contraseña incorrecta
+            Auth -> U : incrementFailedAttemptsAndLockIfNeeded()
+            U --> Auth : lockedNow true/false
+            alt lockedNow == true
+                Auth -> U : addAction("Cuenta bloqueada por intentos fallidos")
+                Auth --> Actor : login fallido (cuenta bloqueada ahora)
+            else lockedNow == false
+                Auth -> U : addAction("Intento fallido de inicio de sesión")
+                Auth --> Actor : login fallido (intento fallido)
+            end
+        end
+    end
+end
+@enduml
+
+' ---------------- Secuencia: Desbloqueo por ADMIN ----------------
+@startuml Secuencia_Desbloqueo_ADMIN
+actor "Admin (Interfaz/Test)" as Admin
+participant "UserService" as US
+participant "User" as Target
+
+Admin -> US : unlockUser(actor=adminUser, targetId)
+US -> US : isAdmin(actor)?
+alt no es admin
+    US --> Admin : permiso denegado
+else es admin
+    US -> US : findById(targetId)
+    US --> US : retorna target o null
+    alt target null
+        US --> Admin : usuario no existe
+    else target existe
+        US -> Target : unlock()
+        Target --> US : (ok)
+        US -> Admin : addAction("Desbloqueó usuario <username>")
+        US --> Admin : retorno true
+    end
+end
+@enduml
