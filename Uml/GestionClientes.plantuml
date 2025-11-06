@@ -1,5 +1,5 @@
-' ---------------- Diagrama de clases  ----------------
-@startumlGestionClientes
+' ---------------- Diagrama de clases ----------------
+@startuml GestionClientes
 skinparam classAttributeIconSize 0
 
 package model {
@@ -24,11 +24,11 @@ package model {
         - password: String
         - role: Role
         - actions: Action[]
-        - actionCount: int
-        - failedLoginAttempts: int
+        - actionCount: Integer
+        - failedLoginAttempts: Integer
         - locked: boolean
-        + static MAX_ACTIONS: int = 100
-        + static MAX_FAILED_ATTEMPTS: int = 3
+        + static MAX_ACTIONS: Integer = 100
+        + static MAX_FAILED_ATTEMPTS: Integer = 3
         + User(id:String, username:String, fullName:String, password:String, role:Role)
         + getId(): String
         + getUsername(): String
@@ -51,11 +51,11 @@ package model {
 package service {
     class UserService {
         - users: User[]
-        - userCount: int
-        + static MAX_USERS: int = 50
+        - userCount: Integer
+        + static MAX_USERS: Integer = 50
         + UserService()
-        - findIndexById(id:String): int
-        - findIndexByUsername(username:String): int
+        - findIndexById(id:String): Integer
+        - findIndexByUsername(username:String): Integer
         + createUser(actor:User, id:String, username:String, fullName:String, password:String, role:Role): boolean
         + findById(id:String): User
         + findByUsername(username:String): User
@@ -74,29 +74,25 @@ package service {
     }
 }
 
-package app {
-    class Main {
-        + main(args: String[]): void
-    }
-}
 
 ' Relaciones
 User "1" *-- "*" Action : contiene >
 UserService ..> User : gestiona >
 AuthService ..> UserService : usa >
-Main ..> AuthService
-Main ..> UserService
+App ..> AuthService
+App ..> UserService
 
 note right of User
-  - failedLoginAttempts: cuenta fallos
-  - locked: true => cuenta bloqueada
-  - ADMIN puede desbloquear y forzar contraseña con setPasswordByAdmin()
+  - En tu código ID es String.
+  - actionCount y failedLoginAttempts son Integer.
+  - locked = true => cuenta bloqueada.
+  - ADMIN puede desbloquear y forzar contraseña con setPasswordByAdmin().
 end note
 
 @enduml
 
 ' ---------------- Secuencia: Login con conteo y bloqueo ----------------
-@startuml Secuencia_Login_Bloqueo
+@startuml Secuencia_Login_Bloqueo_Codigo
 actor "Usuario (Interfaz/Test)" as Actor
 participant "AuthService" as Auth
 participant "UserService" as US
@@ -104,21 +100,21 @@ participant "User" as U
 
 Actor -> Auth : login(username, password)
 Auth -> US : findByUsername(username)
-US --> Auth : retorna User (u) or null
+US --> Auth : retorna User u / null
 alt usuario no encontrado
     Auth --> Actor : login fallido (usuario no encontrado)
 else usuario encontrado
     Auth -> U : isLocked()
-    U --> Auth : false/true
+    U --> Auth : false / true
     alt cuenta bloqueada
         Auth --> Actor : login fallido (cuenta bloqueada)
     else cuenta activa
         Auth -> U : checkPassword(password)
-        U --> Auth : true/false
+        U --> Auth : true / false
         alt contraseña correcta
             Auth -> U : resetFailedAttempts()
             Auth -> U : addAction("Inició sesión")
-            U --> Auth : true/false (registro acción)
+            U --> Auth : registro acción ok/false
             Auth --> Actor : retorna User (login exitoso)
         else contraseña incorrecta
             Auth -> U : incrementFailedAttemptsAndLockIfNeeded()
@@ -136,7 +132,7 @@ end
 @enduml
 
 ' ---------------- Secuencia: Desbloqueo por ADMIN ----------------
-@startuml Secuencia_Desbloqueo_ADMIN
+@startuml Secuencia_Desbloqueo_ADMIN_Codigo
 actor "Admin (Interfaz/Test)" as Admin
 participant "UserService" as US
 participant "User" as Target
@@ -152,7 +148,7 @@ else es admin
         US --> Admin : usuario no existe
     else target existe
         US -> Target : unlock()
-        Target --> US : (ok)
+        Target --> US : ok
         US -> Admin : addAction("Desbloqueó usuario <username>")
         US --> Admin : retorno true
     end
